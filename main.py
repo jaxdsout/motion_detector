@@ -1,12 +1,23 @@
 import cv2
+import os
 import time
 from send_email import send_email
+import glob
+from threading import Thread
 
 webcam = cv2.VideoCapture(0)
 time.sleep(1)
 
 first_frame = None
 status_list = []
+count = 1
+
+
+def clean_dir():
+    images = glob.glob("images/*.png")
+    for image in images:
+        os.remove(image)
+
 
 while True:
     status = 0
@@ -38,15 +49,26 @@ while True:
             (0, 255, 0),
             3
         )
+
         if rectangle.any():
             status = 1
+            cv2.imwrite(f"images/image-{count}.png", frame)
+            count += 1
+            all_captures = glob.glob("images/*.png")
+            index = int(len(all_captures) / 2)
+            target_capture = all_captures[index]
 
     status_list.append(status)
     status_list = status_list[-2:]
-    if status_list[0] == 1 and status_list[1] == 0:
-        send_email()
 
-    print(status_list)
+    if status_list[0] == 1 and status_list[1] == 0:
+        email_thread = Thread(target=send_email, args=(target_capture, ))
+        # daemon allows send_email, clean_dir to be run in the background
+        email_thread.daemon = True
+        email_thread.start()
+
+        clean_thread = Thread(target=clean_dir)
+        clean_thread.daemon = True
 
     cv2.imshow("recall capture", frame)
 
@@ -56,4 +78,5 @@ while True:
         break
 
 webcam.release()
+clean_thread.start()
 
